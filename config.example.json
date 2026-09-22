@@ -1,0 +1,64 @@
+{
+  "timeoutMs": 15000,
+  "models": [
+    {
+      "id": "openai-codex/gpt-6-astra",
+      "tier": "expert",
+      "strengths": ["architecture", "planning", "complex-implementation", "frontend-design", "3d-design", "3d-implementation", "high-risk-reasoning"],
+      "weaknesses": ["higher-cost", "can-overcomplicate-bounded-tasks"],
+      "thinking": { "supported": ["low", "medium", "high"], "default": "medium" },
+      "routing": {
+        "preferWhen": ["task_requires_architecture", "task_requires_system_design", "implementation_is_complex", "frontend_requires_significant_visual_design", "task_requires_3d_design_or_implementation", "consequences_are_high"],
+        "avoidWhen": ["task_is_simple", "task_is_bounded", "task_is_primarily_search", "cheaper_model_is_sufficient"]
+      },
+      "benchmarks": { "artificialAnalysis": { "intelligenceIndex": null, "costPerTask": null } }
+    },
+    {
+      "id": "openai-codex/gpt-6-sol",
+      "tier": "frontier-general",
+      "strengths": ["general-implementation", "debugging", "code-review", "database-review", "frontend-implementation", "cost-efficient-frontier-reasoning"],
+      "weaknesses": ["can-overcomplicate-simple-tasks", "less-preferred-than-astra-for-high-consequence-work"],
+      "thinking": { "supported": ["low", "medium", "high", "xhigh"], "default": "xhigh" },
+      "routing": {
+        "preferWhen": ["task_requires_code", "implementation_is_general", "task_requires_strong-reasoning", "muse_requires_escalation", "code_review_requires_escalation", "build_error_requires_escalation", "quality_matters_but_astra_is_unnecessary"],
+        "avoidWhen": ["task_is_simple_search", "task_is_trivial", "task_requires_high-consequence-architecture"]
+      },
+      "benchmarks": { "artificialAnalysis": { "intelligenceIndex": null, "costPerTask": null } }
+    },
+    {
+      "id": "openai-codex/gpt-6-luna",
+      "tier": "economy-reasoning",
+      "strengths": ["very-low-cost", "reasoning-intensive-low-consequence-work", "high-volume-tasks", "non-interactive-analysis"],
+      "weaknesses": ["slower-reasoning", "lower-capability-than-sol-and-astra", "unclear-primary-routing-niche"],
+      "thinking": { "supported": ["xhigh", "max"], "default": "max" },
+      "routing": {
+        "preferWhen": ["cost_is_high_priority", "latency_is_not_important", "task_is_low-consequence", "task_requires_more-reasoning-than-muse"],
+        "avoidWhen": ["latency_is_important", "implementation_is_complex", "task_is_high-risk"]
+      },
+      "benchmarks": { "artificialAnalysis": { "intelligenceIndex": null, "costPerTask": null } }
+    },
+    {
+      "id": "meta/muse-spark-1.3-contributor",
+      "tier": "fast-economy",
+      "strengths": ["repository-exploration", "search", "tool-use", "bounded-debugging", "bounded-code-review", "inconsequential-implementation", "simple-file-generation", "drafting", "very-low-cost"],
+      "weaknesses": ["instruction-following-on-complex-code", "complex-implementation", "architecture", "high-consequence-decisions"],
+      "thinking": { "supported": ["xhigh", "max"], "default": "max" },
+      "routing": {
+        "preferWhen": ["task_is_bounded", "task_is_low-risk", "task_is_tool-heavy", "task_is_primarily_search", "implementation_is_inconsequential", "task_is_drafting", "first_pass_is_appropriate"],
+        "avoidWhen": ["implementation_is_complex", "task_is_high-risk", "instruction_precision_is_critical", "architecture_is_required"],
+        "escalateTo": "openai-codex/gpt-6-sol"
+      },
+      "benchmarks": { "artificialAnalysis": { "intelligenceIndex": null, "costPerTask": null } }
+    }
+  ],
+  "agents": [
+    { "name": "Explore", "definition": "../agents/Explore.md" },
+    { "name": "architect", "definition": "../agents/architect.md" },
+    { "name": "frontend-builder", "definition": "../agents/frontend-builder.md" },
+    { "name": "build-error-resolver", "definition": "../agents/build-error-resolver.md" },
+    { "name": "code-reviewer", "definition": "../agents/code-reviewer.md" },
+    { "name": "security-reviewer", "definition": "../agents/security-reviewer.md" },
+    { "name": "database-reviewer", "definition": "../agents/database-reviewer.md" },
+    { "name": "drafter", "definition": "../agents/drafter.md" }
+  ]
+}
