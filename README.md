@@ -1,61 +1,67 @@
-# Jev router
+# Jev router for OpenCode
 
-`JevAgent` chooses an agent and a model/thinking pair, then starts the task through the installed `@tintinweb/pi-subagents` RPC executor. There is no dry-run mode, alternate runner, retry or automatic escalation.
+`JevAgent` is an OpenCode custom tool (via `JevRouterPlugin`) that picks a subagent and a model/thinking pair with Jev, then tells the primary agent to delegate through the built-in `task` tool. There is no dry-run mode, retry or automatic escalation. Pure routing logic lives in `router.ts`; OpenCode wiring lives in `plugin.ts`.
 
 ## Install
 
-Requires `@earendil-works/pi-coding-agent`, `@tintinweb/pi-subagents` with RPC protocol 2 (tested with 0.19.0), and a [TypeSafe API key](https://docs.typesafe.ai/introduction/quickstart). Install both Pi packages:
-
-```sh
-pi install npm:@tintinweb/pi-subagents
-pi install git:github.com/Solly922/pi-jev-router
-```
-
-Copy the example into your own Pi agent directory. The Git package is normally cloned under `~/.pi/agent/git/github.com/Solly922/pi-jev-router/`:
-
-```sh
-mkdir -p ~/.pi/agent/jev-router
-cp -n ~/.pi/agent/git/github.com/Solly922/pi-jev-router/config.example.json ~/.pi/agent/jev-router/config.json
-```
-
-Edit **your** `config.json` before routing. Replace model IDs, thinking levels, and agent definition paths with ones available on your machine. `pi --list-models` lists locally available models. The example's names and paths reflect one setup, not a universal catalog. Agent definition paths are relative to `~/.pi/agent/jev-router/`: `../agents/Explore.md` points to `~/.pi/agent/agents/Explore.md`. You must provide those agent definitions yourself. Pi's `PI_CODING_AGENT_DIR` override changes the user config directory.
-
-Export `TYPESAFE_API_KEY` in the shell that launches Pi, or configure it through your shell startup. Never put the key in `config.json`. If Pi was running before you exported it, restart Pi; `/reload` does not update the process environment. Run `/reload` after installing or changing extension code. Config changes take effect on the next call. Don't install a second copy if you already have `JevAgent` in `~/.pi/agent/extensions/`.
+As an npm plugin (any project):
 
 ```json
-{
-  "prompt": "Find the authentication entry points. Read only.",
-  "description": "Find authentication entry points"
-}
+{ "$schema": "https://opencode.ai/config.json", "plugin": ["opencode-jev-router"] }
 ```
 
-Call `JevAgent` with that input to auto-select all three fields. Optional `agent`, `model` and `thinking` fields are hard constraints. Model IDs must exactly match your `jev-router/config.json`, not fuzzy aliases. Optional `max_turns` is forwarded to the executor. Full explicit constraints bypass unnecessary inference but still launch the agent.
+Or as a local plugin — copy `plugin.ts` + `router.ts` into your project or global plugin dir:
 
-The result contains an agent ID. The existing executor owns its queue, tools, lifecycle, completion notifications and `get_subagent_result`. `Agent`, mentions, workflows and `TaskExecute` are unchanged and do not route through Jev. A subagent's frontmatter model/thinking defaults do not override a `JevAgent` selection; the existing RPC executor receives the selected values explicitly.
+```sh
+mkdir -p .opencode/plugins
+cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts .opencode/plugins/jev-router/
+# local plugins needing npm deps also need .opencode/package.json: { "dependencies": { "@opencode-ai/plugin": "^1.18.0" } }
+```
+
+Global equivalents: `~/.config/opencode/plugins/` and `~/.config/opencode/jev-router/config.json`.
+
+Copy the example config into your own OpenCode config directory (project first, global fallback):
+
+```sh
+mkdir -p .opencode/jev-router
+cp -n node_modules/opencode-jev-router/config.example.json .opencode/jev-router/config.json
+```
+
+Lookup order is `JEV_ROUTER_CONFIG` (explicit file) → `<project>/.opencode/jev-router/config.json` → `~/.config/opencode/jev-router/config.json`. Agent definition paths in `config.json` are relative to the config file's directory, e.g. `../agents/Explore.md` resolves to `.opencode/agents/Explore.md`. You must provide those subagent definitions yourself (`~/.config/opencode/agents/` globally or `.opencode/agents/` per project).
+
+Call `JevAgent` to auto-select all three fields:
+
+```json
+{ "prompt": "Find the authentication entry points. Read only.", "description": "Find authentication entry points" }
+```
+
+Optional `agent`, `model` and `thinking` fields are hard constraints and must exactly match `config.json`. `max_turns` is a suggestion carried into the follow-up `task` call. Full explicit constraints bypass inference.
+
+The tool returns the selection as text plus JSON and a next step: invoke the built-in `task` tool with `subagent_type="<agent>"`. OpenCode owns the subagent lifecycle after that.
+
+## API keys — put them in the app, not in this package
+
+Never put keys in `config.json` or commit them. The router resolves at runtime:
+
+- Routing (Jev `systemone` call, `router.ts: jevApiKey/jevEndpoint/jevModel`): `JEV_API_KEY` wins, then `TYPESAFE_API_KEY` (backwards compat), then `AI_GATEWAY_API_KEY` when Jev is reached via Vercel AI Gateway. Endpoint defaults to `https://api.typesafe.ai/v1/systemone`; override with `JEV_BASE_URL` (e.g. your gateway URL) and model with `JEV_MODEL` (default `jev-latest`).
+- Execution models (the `models[]` in `config.json`): these are OpenCode providers. For Vercel AI Gateway, run `/connect`, choose the gateway provider, paste `AI_GATEWAY_API_KEY` (stored in `~/.local/share/opencode/auth.json`), optionally pin `provider.vercel-ai-gateway.options.baseURL: https://ai-gateway.vercel.sh/v1` in `opencode.json`. Model IDs in `config.json` must match what that provider offers.
+
+So a consuming app's `.env`/`.env.local` holds `JEV_API_KEY=` (or `AI_GATEWAY_API_KEY=`) plus `JEV_BASE_URL=` if proxied; this repo holds only code + `config.example.json`.
+
+Note: unlike the old Pi version, there is no local model-registry filtering — keep `config.json` trimmed to models your gateway actually serves, or the follow-up `task` call will fail on an unknown model.
 
 ## Configuration
 
-Edit the user-owned `~/.pi/agent/jev-router/config.json`. Changes take effect on the next call. The package's `config.example.json` is only a template.
-
-- `models` lists exact provider/model IDs, `tier`, strengths and weaknesses, `thinking.supported` and `thinking.default`, routing hints, and nullable `benchmarks.artificialAnalysis` values. `null` means unknown, not zero. These are policy hints for Jev, not measured scores unless you supply them. Only locally available models and thinking levels become candidates. A configured default that the installed model does not support stays in the file but cannot be selected; explicit requests for that level fail. `routing.escalateTo` is advisory only and never starts another agent.
-- `agents` names existing agent definitions. Paths are relative to the **user config directory**, not the extension directory. Use `../agents/Explore.md` for a global agent, or an absolute path for a project agent. Tilde (`~`) is not expanded. Their frontmatter descriptions are read for routing. The router checks global, workspace and project agent directories in executor precedence order and refuses missing, disabled or shadowed configured definitions. Workspace and project discovery uses `process.cwd()`, matching pi-subagents 0.19, not the session's `ctx.cwd`. Update the configured path if you intend to use a project override. This does not create or edit agent definitions.
-- `timeoutMs` bounds the Jev request and executor startup acknowledgement. It does not limit the background agent's full runtime.
-- No fallback is enabled. To explicitly allow one on Jev failure, add `"fallback": {"agent":"Explore","model":"meta/muse-spark-1.3-contributor","thinking":"xhigh"}`. Caller constraints still win. If they make this fallback invalid, the call fails. Cancellation and executor failure never invoke fallback.
-
-The task prompt and eligible model metadata are sent to `https://api.typesafe.ai/v1/systemone` with `jev-latest`. A single request asks for agent choice and a joint model/thinking choice. The configured thinking default is guidance, not an automatic selection. Unknown selections and `none` fail closed unless a fallback was configured. The example includes Muse `max`, which may be unavailable in your Pi model registry; unsupported levels are filtered at runtime.
-
-This uses the documented pi-subagents protocol 2 `spawn` options `model` and `thinkingLevel`. That path honors them before agent frontmatter defaults. Patching the `Agent` tool's arguments alone would not, because its invocation resolver prioritizes frontmatter.
+- `models` lists exact provider/model IDs, tiers, strengths/weaknesses, `thinking.supported` + `thinking.default`, routing hints, nullable `benchmarks.artificialAnalysis` (`null` = unknown). `routing.escalateTo` is advisory only.
+- `agents` names existing OpenCode subagents. The plugin reads `.opencode/agents/*.md` (project, then `~/.config/opencode/agents/`) and refuses missing, disabled or shadowed definitions.
+- `timeoutMs` (100–120000) bounds the Jev request only.
+- No fallback by default. Add `"fallback": {"agent":"Explore","model":"...","thinking":"..."}` to allow one on Jev failure. Caller constraints still win; cancellation never falls back.
 
 ## Checks
 
-From this repository's root:
-
 ```sh
+npm install
 node --test *.test.ts
 ```
 
-Tests run on Node 22+ with native TypeScript support. The integration test needs Pi installed beside the current Node executable; set `PI_PACKAGE_DIR=/path/to/pi-coding-agent` if yours is elsewhere.
-
-Tests exercise candidate selection, overrides, bad responses, explicit fallback, cancellation, deadlines and RPC payloads. The integration test loads the real extension through Pi and checks the registered tool's RPC payload. It finds Pi beside the current Node installation, or accepts `PI_PACKAGE_DIR`. HTTP and executor replies are mocked; these checks do not claim a paid live Jev or child-model run.
-
-References: [TypeSafe API](https://docs.typesafe.ai/api), [Choice](https://docs.typesafe.ai/primitives/choice), and the installed `@tintinweb/pi-subagents/docs/rpc.md`.
+Tests run on Node 22+ with native TypeScript support. HTTP is mocked; nothing hits paid Jev or launches a real subagent.

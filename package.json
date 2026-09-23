@@ -1,15 +1,23 @@
 {
-  "name": "pi-jev-router",
-  "version": "0.1.0",
+  "name": "opencode-jev-router",
+  "version": "0.2.0",
+  "description": "Jev-routed subagent selection for OpenCode (via TypeSafe systemone, direct or through Vercel AI Gateway)",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/Solly922/pi-jev-router.git" },
+  "repository": { "type": "git", "url": "https://github.com/EricJReese/opencode-jev-router.git" },
   "type": "module",
-  "keywords": ["pi-package"],
-  "files": ["index.ts", "router.ts", "config.example.json", "README.md"],
-  "pi": { "extensions": ["./index.ts"] },
-  "peerDependencies": {
-    "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./plugin": "./plugin.ts",
+    "./router": "./router.ts"
+  },
+  "keywords": ["opencode", "opencode-plugin", "jev", "router", "subagents"],
+  "files": ["index.ts", "plugin.ts", "router.ts", "config.example.json", "README.md"],
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
   }
 }

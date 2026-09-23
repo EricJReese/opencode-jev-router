@@ -95,7 +95,7 @@ test('bad inputs and incompatible constraints fail before HTTP', async () => {
 });
 
 test('missing key, HTTP failure, invalid and none selections fail closed without retry', async () => {
-  await assert.rejects(route(config(), task, agents, undefined, fetch, ''), /TYPESAFE_API_KEY/);
+  await assert.rejects(route(config(), task, agents, undefined, fetch, ''), /API_KEY/);
   for (const response of [new Response('', { status: 429 }), Response.json({}),
     Response.json({ answers: { agent: answer('none'), execution: answer('option_0') } }),
     Response.json({ answers: { agent: answer('Explore'), execution: answer('option_900') } })]) {
