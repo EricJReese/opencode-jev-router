@@ -24,11 +24,11 @@ const answer = (choice: string) => ({ type: 'choice', choice });
 test('distributed model catalog uses the new schema and keeps Muse max advisory', () => {
   const example = validateConfig(JSON.parse(readFileSync(new URL('./config.example.json', import.meta.url), 'utf8')));
   assert.deepEqual(example.models.map(m => m.id), [
-    'openai-codex/gpt-6-astra', 'openai-codex/gpt-6-sol', 'openai-codex/gpt-6-luna',
-    'meta/muse-spark-1.3-contributor',
+    'github-copilot/gpt-6-astra', 'github-copilot/gpt-6-sol', 'github-copilot/gpt-6-luna',
+    'opencode/muse-spark-1.3-contributor-free',
   ]);
-  assert.deepEqual(example.models[3].thinking, { supported: ['xhigh', 'max'], default: 'max' });
-  assert.equal(example.models[3].routing.escalateTo, 'openai-codex/gpt-6-sol');
+  assert.deepEqual(example.models[3].thinking, { supported: ['minimal', 'low', 'medium', 'high', 'xhigh'], default: 'xhigh' });
+  assert.equal(example.models[3].routing.escalateTo, 'github-copilot/gpt-6-sol');
   assert.equal(example.models[3].benchmarks.artificialAnalysis.intelligenceIndex, null);
 });
 
