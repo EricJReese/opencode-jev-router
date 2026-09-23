@@ -18,7 +18,7 @@
       "tier": "frontier-general",
       "strengths": ["general-implementation", "debugging", "code-review", "database-review", "frontend-implementation", "cost-efficient-frontier-reasoning"],
       "weaknesses": ["can-overcomplicate-simple-tasks", "less-preferred-than-astra-for-high-consequence-work"],
-      "thinking": { "supported": ["low", "medium", "high", "xhigh"], "default": "xhigh" },
+      "thinking": { "supported": ["low", "medium", "high", "xhigh", "max"], "default": "xhigh" },
       "routing": {
         "preferWhen": ["task_requires_code", "implementation_is_general", "task_requires_strong-reasoning", "muse_requires_escalation", "code_review_requires_escalation", "build_error_requires_escalation", "quality_matters_but_astra_is_unnecessary"],
         "avoidWhen": ["task_is_simple_search", "task_is_trivial", "task_requires_high-consequence-architecture"]
