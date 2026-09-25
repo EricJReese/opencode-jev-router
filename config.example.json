@@ -38,7 +38,7 @@
       "benchmarks": { "artificialAnalysis": { "intelligenceIndex": null, "costPerTask": null } }
     },
     {
-      "id": "opencode/muse-spark-1.3-free",
+      "id": "opencode/muse-spark-1.3-contributor-free",
       "tier": "fast-economy",
       "strengths": ["repository-exploration", "search", "tool-use", "bounded-debugging", "bounded-code-review", "inconsequential-implementation", "simple-file-generation", "drafting", "very-low-cost"],
       "weaknesses": ["instruction-following-on-complex-code", "complex-implementation", "architecture", "high-consequence-decisions"],

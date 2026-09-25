@@ -1,8 +1,9 @@
 import { homedir } from 'node:os';
 import { readFile, readdir } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
-import { tool, type Plugin } from '@opencode-ai/plugin';
+import { tool, type Plugin, type PluginInput } from '@opencode-ai/plugin';
 import { THINKING, route, validateConfig, validateInput, type Agent } from './router.ts';
+import { connectedModels, runtimeCompatibleConfig } from './runtime.ts';
 
 const CONFIG_REL = '.opencode/jev-router/config.json';
 const GLOBAL_CONFIG_REL = 'jev-router/config.json';
@@ -89,7 +90,8 @@ async function discoverAgents(directory: string, worktree: string): Promise<Map<
   return definitions;
 }
 
-const JevAgent = tool({
+function createJevAgent(client: PluginInput['client']) {
+  return tool({
   description:
     'Select an existing OpenCode subagent, model and thinking effort with Jev, then delegate via the task tool. Omit agent/model/thinking for automatic selection, or set exact configured values as hard constraints. No retries or automatic escalation.',
   args: {
@@ -103,7 +105,10 @@ const JevAgent = tool({
   async execute(args, context) {
     const directory = context.directory || process.cwd();
     const worktree = context.worktree || directory;
-    const { config, configPath } = await loadConfig(directory, worktree);
+    const loaded = await loadConfig(directory, worktree);
+    const runtimeModels = await connectedModels(client, directory, context.abort);
+    const config = runtimeCompatibleConfig(loaded.config, runtimeModels);
+    const { configPath } = loaded;
     validateInput(config, args);
     const definitions = await discoverAgents(directory, worktree);
     const agents: Agent[] = config.agents.map(entry => {
@@ -115,7 +120,7 @@ const JevAgent = tool({
       }
       return { name: entry.name, description: definition.description };
     });
-    const selection = await route(config, args, agents, undefined);
+    const selection = await route(config, args, agents, context.abort);
     const next = `Next step: invoke the task tool with subagent_type="${selection.agent}" and prompt starting with "[model: ${selection.model}] ${args.prompt}"` +
       (args.max_turns === undefined ? '' : ` (suggested turn limit: ${args.max_turns})`);
     return [
@@ -124,8 +129,9 @@ const JevAgent = tool({
       JSON.stringify({ ...selection, ...(args.max_turns === undefined ? {} : { max_turns: args.max_turns }) }),
     ].join('\n');
   },
-});
+  });
+}
 
-export const JevRouterPlugin: Plugin = async (_ctx) => ({
-  tool: { JevAgent },
+export const JevRouterPlugin: Plugin = async (ctx) => ({
+  tool: { JevAgent: createJevAgent(ctx.client) },
 });

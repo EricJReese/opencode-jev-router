@@ -10,12 +10,19 @@ As an npm plugin (any project):
 { "$schema": "https://opencode.ai/config.json", "plugin": ["opencode-jev-router"] }
 ```
 
-Or as a local plugin — copy `plugin.ts` + `router.ts` into your project or global plugin dir:
+Or as a local plugin — copy `plugin.ts` + `router.ts` + `runtime.ts` into your project or global plugin dir:
 
 ```sh
 mkdir -p .opencode/plugins
-cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts .opencode/plugins/jev-router/
+cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts /path/to/opencode-jev-router/runtime.ts .opencode/plugins/jev-router/
 # local plugins needing npm deps also need .opencode/package.json: { "dependencies": { "@opencode-ai/plugin": "^1.18.0" } }
+```
+
+Optional but recommended: copy the routing skill alongside it:
+
+```sh
+mkdir -p .opencode/skills
+cp -r /path/to/opencode-jev-router/skills/jev-router .opencode/skills/
 ```
 
 Global equivalents: `~/.config/opencode/plugins/` and `~/.config/opencode/jev-router/config.json`.
@@ -37,7 +44,11 @@ Call `JevAgent` to auto-select all three fields:
 
 Optional `agent`, `model` and `thinking` fields are hard constraints and must exactly match `config.json`. `max_turns` is a suggestion carried into the follow-up `task` call. Full explicit constraints bypass inference.
 
-The tool returns the selection as text plus JSON and a next step: invoke the built-in `task` tool with `subagent_type="<agent>"`. OpenCode owns the subagent lifecycle after that.
+The tool returns the selection as text plus JSON and a next step: invoke the built-in `task` tool with `subagent_type="<agent>"`. OpenCode owns the subagent lifecycle after that. Honor the returned agent exactly — never substitute another subagent or skip the `task` call. The `model`/`thinking` values are advisory: `task` runs the subagent's configured default model.
+
+Before routing, the tool intersects your configured catalog with the models the running OpenCode instance actually serves (`runtime.ts`). Selections can therefore never name a disconnected provider or an unsupported thinking level; an empty intersection fails fast with a diagnostic instead of failing later inside `task`.
+
+To make a Jev-typical model stick per agent, set a static `model: provider/model-id` in that agent's `.opencode/agents/<name>.md` frontmatter (restart OpenCode to reload; applies to every invocation of that agent, not just routed ones).
 
 ## API keys — put them in the app, not in this package
 
@@ -52,7 +63,7 @@ Note: unlike the old Pi version, there is no local model-registry filtering — 
 
 ## Configuration
 
-- `models` lists exact provider/model IDs, tiers, strengths/weaknesses, `thinking.supported` + `thinking.default`, routing hints, nullable `benchmarks.artificialAnalysis` (`null` = unknown). `routing.escalateTo` is advisory only.
+- `models` lists exact provider/model IDs, tiers, strengths/weaknesses, `thinking.supported` + `thinking.default`, routing hints, nullable `benchmarks.artificialAnalysis` (`null` = unknown). `routing.escalateTo` is advisory only. At runtime the list is filtered to connected providers and advertised thinking variants, so keep it as the full preference set rather than trimming it per machine.
 - `agents` names existing OpenCode subagents. The plugin reads `.opencode/agents/*.md` (project, then `~/.config/opencode/agents/`) and refuses missing, disabled or shadowed definitions.
 - `timeoutMs` (100–120000) bounds the Jev request only.
 - No fallback by default. Add `"fallback": {"agent":"Explore","model":"...","thinking":"..."}` to allow one on Jev failure. Caller constraints still win; cancellation never falls back.

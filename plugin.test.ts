@@ -30,8 +30,16 @@ const baseConfig = {
 };
 const agentMd = '---\nname: architect\ndescription: Reviews boundaries\n---\nBody\n';
 
+// Runtime catalog containing exactly the model the fixture config declares.
+const client = { provider: { async list() { return { data: {
+  connected: ['gateway'],
+  all: [{ id: 'gateway', models: {
+    strong: { id: 'strong', variants: { high: {} }, capabilities: { reasoning: true } },
+  } }],
+} }; } } };
+
 test('plugin exposes a JevAgent tool that routes fully-constrained calls without HTTP', async () => {
-  const plugin = await JevRouterPlugin({} as any);
+  const plugin = await JevRouterPlugin({ client } as any);
   const toolDef = (plugin.tool as any).JevAgent;
   assert.ok(toolDef, 'JevAgent tool must be registered');
 
@@ -52,7 +60,7 @@ test('plugin exposes a JevAgent tool that routes fully-constrained calls without
 });
 
 test('plugin fails before HTTP when config is missing or the agent is disabled', async () => {
-  const plugin = await JevRouterPlugin({} as any);
+  const plugin = await JevRouterPlugin({ client } as any);
   const toolDef = (plugin.tool as any).JevAgent;
   const dir = await mkdtemp(join(tmpdir(), 'jev-opencode-empty-'));
   try {
@@ -71,6 +79,22 @@ test('plugin fails before HTTP when config is missing or the agent is disabled',
     } finally {
       await rm(filled, { recursive: true, force: true });
     }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin rejects configured models the runtime does not serve', async () => {
+  const plugin = await JevRouterPlugin({ client } as any);
+  const dir = await project({ config: baseConfig, agentMd });
+  try {
+    await assert.rejects(
+      (plugin.tool as any).JevAgent.execute(
+        { prompt: 'Review.', description: 'Review', agent: 'architect', model: 'gateway/missing', thinking: 'high' },
+        context(dir),
+      ),
+      /Model override must exactly match/,
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
