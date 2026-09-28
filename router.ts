@@ -22,27 +22,18 @@ export type Input = { prompt: string; description: string; agent?: string; model
 export type Agent = { name: string; description: string };
 type Bus = { on(event: string, handler: (data: any) => void): () => void; emit(event: string, data: unknown): void };
 
-/** Jev `systemone` endpoint. Override with JEV_BASE_URL (e.g. a Vercel AI Gateway URL). */
-export const DEFAULT_JEV_URL = 'https://api.typesafe.ai/v1/systemone';
-export function jevEndpoint(): string {
-  return process.env.JEV_BASE_URL?.trim() || process.env.JEV_ENDPOINT?.trim() || DEFAULT_JEV_URL;
-}
-
-/** Jev routing model. Override with JEV_MODEL. */
-export function jevModel(): string {
-  return process.env.JEV_MODEL?.trim() || 'jev-latest';
-}
+/** Jev runs on the direct TypeSafe API; delegated execution stays on connected OpenCode providers. */
+export const JEV_API_URL = 'https://api.typesafe.ai/v1/systemone';
+export const JEV_MODEL = 'jev-latest';
 
 /**
- * Resolve the Jev API key. `explicit` wins (tests callers), then the consuming
- * app's environment: JEV_API_KEY first, TYPESAFE_API_KEY for backwards
- * compatibility, AI_GATEWAY_API_KEY when Jev is reached via Vercel AI Gateway.
+ * Resolve the Jev API key. `explicit` wins (tests callers), then the
+ * TypeSafe direct key. Routing never uses Copilot credentials.
  * Keys live in the app's `.env`/shell — never in this package or config.json.
  */
 export function jevApiKey(explicit?: string): string | undefined {
   if (explicit?.trim()) return explicit;
-  return process.env.JEV_API_KEY?.trim() || process.env.TYPESAFE_API_KEY?.trim() ||
-    process.env.AI_GATEWAY_API_KEY?.trim() || undefined;
+  return process.env.TYPESAFE_API_KEY?.trim() || undefined;
 }
 
 /** Reject configuration errors before sending task content or starting an agent. */
@@ -141,11 +132,11 @@ export async function route(c: Config, p: Input, agents: Agent[], signal?: Abort
     let answers: any = {};
     if (Object.keys(questions).length) {
       const key = jevApiKey(apiKey);
-      if (!key) throw new Error('JEV_API_KEY is not set (TYPESAFE_API_KEY and AI_GATEWAY_API_KEY also accepted).');
+      if (!key) throw new Error('TYPESAFE_API_KEY is not set.');
       const deadline = AbortSignal.timeout(c.timeoutMs);
-      const response = await fetcher(jevEndpoint(), {
+      const response = await fetcher(JEV_API_URL, {
         method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: jevModel(), state: { task: p.prompt, description: p.description }, questions }),
+        body: JSON.stringify({ model: JEV_MODEL, state: { task: p.prompt, description: p.description }, questions }),
         signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
       });
       if (!response.ok) throw new Error(`TypeSafe returned HTTP ${response.status}.`);

@@ -54,12 +54,12 @@ To make a Jev-typical model stick per agent, set a static `model: provider/model
 
 Never put keys in `config.json` or commit them. The router resolves at runtime:
 
-- Routing (Jev `systemone` call, `router.ts: jevApiKey/jevEndpoint/jevModel`): `JEV_API_KEY` wins, then `TYPESAFE_API_KEY` (backwards compat), then `AI_GATEWAY_API_KEY` when Jev is reached via Vercel AI Gateway. Endpoint defaults to `https://api.typesafe.ai/v1/systemone`; override with `JEV_BASE_URL` (e.g. your gateway URL) and model with `JEV_MODEL` (default `jev-latest`).
-- Execution models (the `models[]` in `config.json`): these are OpenCode providers. For Vercel AI Gateway, run `/connect`, choose the gateway provider, paste `AI_GATEWAY_API_KEY` (stored in `~/.local/share/opencode/auth.json`), optionally pin `provider.vercel-ai-gateway.options.baseURL: https://ai-gateway.vercel.sh/v1` in `opencode.json`. Model IDs in `config.json` must match what that provider offers.
+- Routing (Jev `systemone` call, `router.ts: jevApiKey`): `TYPESAFE_API_KEY`. Endpoint is `https://api.typesafe.ai/v1/systemone` and the model is `jev-latest` (constants `JEV_API_URL`/`JEV_MODEL` in `router.ts`).
+- Execution models (the `models[]` in `config.json`): these are OpenCode providers. Model IDs in `config.json` must match what the connected providers offer (see `runtime.ts`: the tool intersects the configured catalog with the running instance's connected models before routing).
 
-So a consuming app's `.env`/`.env.local` holds `JEV_API_KEY=` (or `AI_GATEWAY_API_KEY=`) plus `JEV_BASE_URL=` if proxied; this repo holds only code + `config.example.json`.
+So a consuming app's `.env`/`.env.local` holds `TYPESAFE_API_KEY=`; this repo holds only code + `config.example.json`.
 
-Note: unlike the old Pi version, there is no local model-registry filtering — keep `config.json` trimmed to models your gateway actually serves, or the follow-up `task` call will fail on an unknown model.
+Note: unlike the old Pi version, there is no local model-registry filtering — keep `config.json` trimmed to models your providers actually serve, or the follow-up `task` call will fail on an unknown model.
 
 ## Configuration
 

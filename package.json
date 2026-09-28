@@ -1,7 +1,7 @@
 {
   "name": "opencode-jev-router",
   "version": "0.3.0",
-  "description": "Jev-routed subagent selection for OpenCode (via TypeSafe systemone, direct or through Vercel AI Gateway)",
+  "description": "Jev-routed subagent selection for OpenCode (via the direct TypeSafe systemone API)",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/EricJReese/opencode-jev-router.git" },
   "type": "module",
