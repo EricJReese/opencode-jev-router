@@ -59,6 +59,91 @@ test('plugin exposes a JevAgent tool that routes fully-constrained calls without
   }
 });
 
+test('JevExecute enforces agent, model and thinking variant in a child session', async () => {
+  const calls: { create: any[]; prompt: any[] } = { create: [], prompt: [] };
+  const routedClient = {
+    provider: { async list() { return { data: {
+      connected: ['gateway'],
+      all: [{ id: 'gateway', models: {
+        strong: { id: 'strong', variants: { high: {} }, capabilities: { reasoning: false } },
+      } }],
+    } }; } },
+    session: {
+      async create(options: any) {
+        calls.create.push(options);
+        return { data: { id: 'child-session' } };
+      },
+      async prompt(options: any) {
+        calls.prompt.push(options);
+        return { data: { info: { variant: 'high' }, parts: [{ type: 'text', text: 'Review complete.' }] } };
+      },
+    },
+  };
+  const plugin = await JevRouterPlugin({ client: routedClient } as any);
+  const toolDef = (plugin.tool as any).JevExecute;
+  assert.ok(toolDef, 'JevExecute tool must be registered');
+
+  const dir = await project({ config: baseConfig, agentMd });
+  try {
+    const out = await toolDef.execute(
+      { prompt: 'Review module boundaries.', description: 'Review boundaries',
+        agent: 'architect', model: 'gateway/strong', thinking: 'high' },
+      {
+        ...context(dir), abort: new AbortController().signal,
+        metadata() {}, ask: async () => {},
+      },
+    );
+    assert.match(out, /\[Jev: agent=architect model=gateway\/strong thinking=high source=constraints\] \[via=v1\+variant\]/);
+    assert.match(out, /Review complete\./);
+    assert.equal(calls.create.length, 1);
+    assert.equal(calls.create[0].body.parentID, 's');
+    assert.equal(calls.prompt.length, 1);
+    assert.equal(calls.prompt[0].body.agent, 'architect');
+    assert.deepEqual(calls.prompt[0].body.model, { providerID: 'gateway', modelID: 'strong' });
+    assert.equal(calls.prompt[0].body.variant, 'high');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('JevExecute maps off to none and retries without variant when unsupported', async () => {
+  const prompts: any[] = [];
+  const routedClient = {
+    provider: { async list() { return { data: {
+      connected: ['gateway'],
+      all: [{ id: 'gateway', models: {
+        strong: { id: 'strong', variants: { high: {} }, capabilities: { reasoning: false } },
+      } }],
+    } }; } },
+    session: {
+      async create() { return { data: { id: 'child-session' } }; },
+      async prompt(options: any) {
+        prompts.push(options);
+        if (prompts.length === 1) throw new Error('400: unsupported variant field');
+        return { data: { info: {}, parts: [{ type: 'text', text: 'Fallback response.' }] } };
+      },
+    },
+  };
+  const offConfig = {
+    ...baseConfig,
+    models: [{ ...baseConfig.models[0], thinking: { supported: ['off'] as const, default: 'off' as const } }],
+  };
+  const plugin = await JevRouterPlugin({ client: routedClient } as any);
+  const dir = await project({ config: offConfig, agentMd });
+  try {
+    const out = await (plugin.tool as any).JevExecute.execute(
+      { prompt: 'Review.', description: 'Review', agent: 'architect', model: 'gateway/strong', thinking: 'off' },
+      { ...context(dir), abort: new AbortController().signal, metadata() {}, ask: async () => {} },
+    );
+    assert.match(out, /\[via=v1\]/);
+    assert.equal(prompts.length, 2);
+    assert.equal(prompts[0].body.variant, 'none');
+    assert.equal('variant' in prompts[1].body, false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('plugin fails before HTTP when config is missing or the agent is disabled', async () => {
   const plugin = await JevRouterPlugin({ client } as any);
   const toolDef = (plugin.tool as any).JevAgent;

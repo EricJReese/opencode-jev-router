@@ -1,6 +1,6 @@
 # Jev router for OpenCode
 
-`JevAgent` is an OpenCode custom tool (via `JevRouterPlugin`) that picks a subagent and a model/thinking pair with Jev, then tells the primary agent to delegate through the built-in `task` tool. There is no dry-run mode, retry or automatic escalation. Pure routing logic lives in `router.ts`; OpenCode wiring lives in `plugin.ts`.
+`JevRouterPlugin` provides two tools: `JevAgent` picks a subagent and model/thinking pair with Jev and returns a routing-only decision; `JevExecute` routes and executes in a child session with Jev's selected agent, model, and thinking variant. `JevExecute` coexists with OpenCode's built-in `task` tool and returns a decision/authority header plus the child result. Pure routing logic lives in `router.ts`; OpenCode wiring lives in `plugin.ts`; child-session execution lives in `execute.ts`.
 
 ## Install
 
@@ -14,7 +14,7 @@ Or as a local plugin — copy `plugin.ts` + `router.ts` + `runtime.ts` into your
 
 ```sh
 mkdir -p .opencode/plugins
-cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts /path/to/opencode-jev-router/runtime.ts .opencode/plugins/jev-router/
+cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts /path/to/opencode-jev-router/runtime.ts /path/to/opencode-jev-router/execute.ts .opencode/plugins/jev-router/
 # local plugins needing npm deps also need .opencode/package.json: { "dependencies": { "@opencode-ai/plugin": "^1.18.0" } }
 ```
 
@@ -36,19 +36,19 @@ cp -n node_modules/opencode-jev-router/config.example.json .opencode/jev-router/
 
 Lookup order is `JEV_ROUTER_CONFIG` (explicit file) → `<project>/.opencode/jev-router/config.json` → `~/.config/opencode/jev-router/config.json`. Agent definition paths in `config.json` are relative to the config file's directory, e.g. `../agents/Explore.md` resolves to `.opencode/agents/Explore.md`. You must provide those subagent definitions yourself (`~/.config/opencode/agents/` globally or `.opencode/agents/` per project).
 
-Call `JevAgent` to auto-select all three fields:
+Call `JevExecute` to auto-select and execute all three fields:
 
 ```json
 { "prompt": "Find the authentication entry points. Read only.", "description": "Find authentication entry points" }
 ```
 
-Optional `agent`, `model` and `thinking` fields are hard constraints and must exactly match `config.json`. `max_turns` is a suggestion carried into the follow-up `task` call. Full explicit constraints bypass inference.
+Optional `agent`, `model` and `thinking` fields are hard constraints and must exactly match `config.json`. Full explicit constraints bypass inference. Execution is uncapped.
 
-The tool returns the selection as text plus JSON and a next step: invoke the built-in `task` tool with `subagent_type="<agent>"`. OpenCode owns the subagent lifecycle after that. Honor the returned agent exactly — never substitute another subagent or skip the `task` call. The `model`/`thinking` values are advisory: `task` runs the subagent's configured default model.
+`JevExecute` creates a child session using the selected agent and model, and sends the selected thinking variant (Jev `off` maps to OpenCode `none`). Its header includes `[via=v1+variant]` when the server echoes the selected variant; `[via=v1]` means variant enforcement could not be verified. `JevAgent` remains available for dry runs; if you use its result with built-in `task`, that tool runs the subagent's configured default model, so model and effort remain advisory.
 
 Before routing, the tool intersects your configured catalog with the models the running OpenCode instance actually serves (`runtime.ts`). Selections can therefore never name a disconnected provider or an unsupported thinking level; an empty intersection fails fast with a diagnostic instead of failing later inside `task`.
 
-To make a Jev-typical model stick per agent, set a static `model: provider/model-id` in that agent's `.opencode/agents/<name>.md` frontmatter (restart OpenCode to reload; applies to every invocation of that agent, not just routed ones).
+`JevExecute` is uncapped by default; the child session may use tools until the model completes.
 
 ## API keys — put them in the app, not in this package
 
@@ -59,7 +59,7 @@ Never put keys in `config.json` or commit them. The router resolves at runtime:
 
 So a consuming app's `.env`/`.env.local` holds `TYPESAFE_API_KEY=`; this repo holds only code + `config.example.json`.
 
-Note: unlike the old Pi version, there is no local model-registry filtering — keep `config.json` trimmed to models your providers actually serve, or the follow-up `task` call will fail on an unknown model.
+Note: unlike the old Pi version, there is no local model-registry filtering — the runtime compatibility filter uses the connected models exposed by OpenCode before offering Jev its choices.
 
 ## Configuration
 

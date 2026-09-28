@@ -4,6 +4,7 @@ import { basename, dirname, resolve } from 'node:path';
 import { tool, type Plugin, type PluginInput } from '@opencode-ai/plugin';
 import { THINKING, route, validateConfig, validateInput, type Agent } from './router.ts';
 import { connectedModels, runtimeCompatibleConfig } from './runtime.ts';
+import { createJevExecute } from './execute.ts';
 
 const CONFIG_REL = '.opencode/jev-router/config.json';
 const GLOBAL_CONFIG_REL = 'jev-router/config.json';
@@ -133,5 +134,8 @@ function createJevAgent(client: PluginInput['client']) {
 }
 
 export const JevRouterPlugin: Plugin = async (ctx) => ({
-  tool: { JevAgent: createJevAgent(ctx.client) },
+  tool: {
+    JevAgent: createJevAgent(ctx.client),
+    JevExecute: createJevExecute(ctx.client, { loadConfig, discoverAgents }),
+  },
 });
