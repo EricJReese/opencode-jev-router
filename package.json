@@ -14,7 +14,7 @@
     "./execute": "./execute.ts"
   },
   "keywords": ["opencode", "opencode-plugin", "jev", "router", "subagents"],
-  "files": ["index.ts", "plugin.ts", "router.ts", "runtime.ts", "execute.ts", "config.example.json", "README.md", "skills/jev-router/SKILL.md"],
+  "files": ["index.ts", "plugin.ts", "router.ts", "runtime.ts", "execute.ts", "credit-budget.ts", "config.example.json", "README.md", "skills/jev-router/SKILL.md"],
   "dependencies": {
     "@opencode-ai/plugin": "^1.18.0"
   },

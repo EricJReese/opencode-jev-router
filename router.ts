@@ -11,12 +11,15 @@ export type ModelConfig = {
   thinking: { supported: Thinking[]; default: Thinking };
   routing: { preferWhen: string[]; avoidWhen: string[]; escalateTo?: string };
   benchmarks: { artificialAnalysis: { intelligenceIndex: number | null; costPerTask: number | null } };
+  /** Estimated GitHub AI credits consumed by one routed task. Required for GitHub models when creditBudget is enabled. */
+  estimatedCreditsPerTask?: number;
 };
 export type Config = {
   timeoutMs: number;
   models: ModelConfig[];
   agents: { name: string; definition: string }[];
   fallback?: Selection;
+  creditBudget?: { monthlyLimit: number; preferEconomyWhenRemainingBelow?: number };
 };
 export type Input = { prompt: string; description: string; agent?: string; model?: string; thinking?: Thinking; max_turns?: number };
 export type Agent = { name: string; description: string };
@@ -32,7 +35,7 @@ export const JEV_MODEL = 'jev-latest';
  * Keys live in the app's `.env`/shell — never in this package or config.json.
  */
 export function jevApiKey(explicit?: string): string | undefined {
-  if (explicit?.trim()) return explicit;
+  if (explicit !== undefined) return explicit.trim() || undefined;
   return process.env.TYPESAFE_API_KEY?.trim() || undefined;
 }
 
@@ -60,7 +63,20 @@ export function validateConfig(value: unknown): Config {
         (m.routing.escalateTo !== undefined && (typeof m.routing.escalateTo !== 'string' || !m.routing.escalateTo.trim())) ||
         !m.benchmarks?.artificialAnalysis ||
         !metric(m.benchmarks.artificialAnalysis.intelligenceIndex) ||
-        !metric(m.benchmarks.artificialAnalysis.costPerTask)) throw new Error(`Invalid Jev model entry: ${m?.id ?? 'unknown'}.`);
+        !metric(m.benchmarks.artificialAnalysis.costPerTask) ||
+        (m.estimatedCreditsPerTask !== undefined && (!Number.isFinite(m.estimatedCreditsPerTask) || m.estimatedCreditsPerTask <= 0))) {
+      throw new Error(`Invalid Jev model entry: ${m?.id ?? 'unknown'}.`);
+    }
+  }
+  if (c.creditBudget !== undefined) {
+    if (!c.creditBudget || !Number.isFinite(c.creditBudget.monthlyLimit) || c.creditBudget.monthlyLimit <= 0 ||
+        (c.creditBudget.preferEconomyWhenRemainingBelow !== undefined &&
+          (!Number.isFinite(c.creditBudget.preferEconomyWhenRemainingBelow) || c.creditBudget.preferEconomyWhenRemainingBelow <= 0 || c.creditBudget.preferEconomyWhenRemainingBelow > c.creditBudget.monthlyLimit))) {
+      throw new Error('Jev creditBudget requires a positive monthlyLimit and optional preferEconomyWhenRemainingBelow no greater than the limit.');
+    }
+    for (const m of c.models.filter(model => model.id.startsWith('github-copilot/'))) {
+      if (m.estimatedCreditsPerTask === undefined) throw new Error(`Jev creditBudget requires estimatedCreditsPerTask for ${m.id}.`);
+    }
   }
   for (const m of c.models) {
     if (m.routing.escalateTo && (m.routing.escalateTo === m.id || !c.models.some(other => other.id === m.routing.escalateTo))) {
@@ -111,7 +127,8 @@ export function validateSelection(c: Config, s: Selection): Selection {
 
 /** One request, no retries. Full overrides need no paid inference. */
 export async function route(c: Config, p: Input, agents: Agent[], signal?: AbortSignal,
-  fetcher: typeof fetch = fetch, apiKey?: string): Promise<Selection & { source: string }> {
+  fetcher: typeof fetch = fetch, apiKey?: string,
+  budget?: { used: number; remaining: number }): Promise<Selection & { source: string }> {
   validateInput(c, p);
   signal?.throwIfAborted();
   const choices = pairs(c, p);
@@ -123,7 +140,7 @@ export async function route(c: Config, p: Input, agents: Agent[], signal?: Abort
     criteria: { ...Object.fromEntries(agentChoices.map(a => [a.name, a.description])), none: 'No suitable agent.' },
   };
   if (choices.length > 1) questions.execution = {
-    type: 'choice', instructions: 'Choose the model and thinking effort adequate for the task. Prefer lower cost and effort when adequate. The configured default is a preference only if it appears in the supported thinking levels; otherwise ignore it. Routing hints and escalation targets are advisory only; no second agent is launched. Null benchmarks mean unknown, not zero. Select none if no option is adequate.',
+      type: 'choice', instructions: `Choose the model and thinking effort adequate for the task. Prefer lower cost and effort when adequate.${budget && c.creditBudget ? ` Monthly GitHub AI-credit estimate: ${budget.used}/${c.creditBudget.monthlyLimit} used, ${budget.remaining} remaining. Strongly prefer lower-credit models when remaining credits are at or below ${c.creditBudget.preferEconomyWhenRemainingBelow ?? Math.ceil(c.creditBudget.monthlyLimit * 0.25)}; the router excludes GitHub models whose configured task estimate exceeds remaining credits.` : ''} The configured default is a preference only if it appears in the supported thinking levels; otherwise ignore it. Routing hints and escalation targets are advisory only; no second agent is launched. Null benchmarks mean unknown, not zero. Select none if no option is adequate.`,
     criteria: { ...Object.fromEntries(choices.map((s, i) => [`option_${i}`, {
       ...c.models.find(m => m.id === s.model), selectedThinking: s.thinking,
     }])), none: 'No suitable execution configuration.' },
@@ -136,7 +153,8 @@ export async function route(c: Config, p: Input, agents: Agent[], signal?: Abort
       const deadline = AbortSignal.timeout(c.timeoutMs);
       const response = await fetcher(JEV_API_URL, {
         method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: JEV_MODEL, state: { task: p.prompt, description: p.description }, questions }),
+       body: JSON.stringify({ model: JEV_MODEL, state: { task: p.prompt, description: p.description,
+         ...(budget ? { monthlyCreditBudget: { used: budget.used, remaining: budget.remaining, limit: c.creditBudget?.monthlyLimit } } : {}) }, questions }),
         signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
       });
       if (!response.ok) throw new Error(`TypeSafe returned HTTP ${response.status}.`);

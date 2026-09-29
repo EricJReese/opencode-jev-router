@@ -5,6 +5,7 @@ import { tool, type Plugin, type PluginInput } from '@opencode-ai/plugin';
 import { THINKING, route, validateConfig, validateInput, type Agent } from './router.ts';
 import { connectedModels, runtimeCompatibleConfig } from './runtime.ts';
 import { createJevExecute } from './execute.ts';
+import { applyCreditBudget, getCreditBudget, modelCreditEstimate, setCreditBudgetUsage } from './credit-budget.ts';
 
 const CONFIG_REL = '.opencode/jev-router/config.json';
 const GLOBAL_CONFIG_REL = 'jev-router/config.json';
@@ -108,7 +109,9 @@ function createJevAgent(client: PluginInput['client']) {
     const worktree = context.worktree || directory;
     const loaded = await loadConfig(directory, worktree);
     const runtimeModels = await connectedModels(client, directory, context.abort);
-    const config = runtimeCompatibleConfig(loaded.config, runtimeModels);
+    const runtimeConfig = runtimeCompatibleConfig(loaded.config, runtimeModels);
+    const budgetStatus = await getCreditBudget(runtimeConfig);
+    const config = applyCreditBudget(runtimeConfig, args, budgetStatus);
     const { configPath } = loaded;
     validateInput(config, args);
     const definitions = await discoverAgents(directory, worktree);
@@ -121,13 +124,15 @@ function createJevAgent(client: PluginInput['client']) {
       }
       return { name: entry.name, description: definition.description };
     });
-    const selection = await route(config, args, agents, context.abort);
+    const selection = await route(config, args, agents, context.abort, fetch, undefined, budgetStatus);
+    const estimatedCredits = modelCreditEstimate(config, selection);
     const next = `Next step: invoke the task tool with subagent_type="${selection.agent}" and prompt starting with "[model: ${selection.model}] ${args.prompt}"` +
       (args.max_turns === undefined ? '' : ` (suggested turn limit: ${args.max_turns})`);
     return [
-      `Selected ${selection.agent}: ${selection.model}, thinking ${selection.thinking}. Route: ${selection.source}.`,
+      `Selected ${selection.agent}: ${selection.model}, thinking ${selection.thinking}. Route: ${selection.source}.` +
+        (budgetStatus ? ` Estimated task credits: ${estimatedCredits}. Monthly estimate: ${budgetStatus.used}/${budgetStatus.limit} used (${budgetStatus.remaining} remaining); recommendation only, not reserved until JevExecute.` : ''),
       next,
-      JSON.stringify({ ...selection, ...(args.max_turns === undefined ? {} : { max_turns: args.max_turns }) }),
+      JSON.stringify({ ...selection, ...(budgetStatus ? { estimatedCredits, creditBudget: budgetStatus } : {}), ...(args.max_turns === undefined ? {} : { max_turns: args.max_turns }) }),
     ].join('\n');
   },
   });
@@ -137,5 +142,21 @@ export const JevRouterPlugin: Plugin = async (ctx) => ({
   tool: {
     JevAgent: createJevAgent(ctx.client),
     JevExecute: createJevExecute(ctx.client, { loadConfig, discoverAgents }),
+    JevCreditBudget: tool({
+      description: 'View the local monthly GitHub AI-credit estimate and remaining budget. Optionally reconcile it to the current usage shown in Copilot settings.',
+      args: { reportedUsage: tool.schema.number().min(0).optional().describe('Current month-to-date credits shown in Copilot settings; replaces the local estimate for this month.') },
+      async execute(args, context) {
+        const directory = context.directory || process.cwd();
+        const worktree = context.worktree || directory;
+        const { config } = await loadConfig(directory, worktree);
+        if (args.reportedUsage !== undefined) {
+          const status = await setCreditBudgetUsage(config, args.reportedUsage);
+          return `Reconciled local estimate to ${status.used}/${status.limit} credits for ${status.month}; ${status.remaining} remaining.`;
+        }
+        const status = await getCreditBudget(config);
+        if (!status) return 'Credit budget tracking is not configured. Add creditBudget to jev-router/config.json.';
+        return `Estimated GitHub AI credits for ${status.month}: ${status.used}/${status.limit} used; ${status.remaining} remaining. Estimates include JevExecute launches and do not include activity outside this router.`;
+      },
+    }),
   },
 });

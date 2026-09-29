@@ -1,6 +1,6 @@
 # Jev router for OpenCode
 
-`JevRouterPlugin` provides two tools: `JevAgent` picks a subagent and model/thinking pair with Jev and returns a routing-only decision; `JevExecute` routes and executes in a child session with Jev's selected agent, model, and thinking variant. `JevExecute` coexists with OpenCode's built-in `task` tool and returns a decision/authority header plus the child result. Pure routing logic lives in `router.ts`; OpenCode wiring lives in `plugin.ts`; child-session execution lives in `execute.ts`.
+`JevRouterPlugin` provides three tools: `JevAgent` picks a subagent and model/thinking pair with Jev and returns a routing-only decision; `JevExecute` routes and executes in a child session with Jev's selected agent, model, and thinking variant; `JevCreditBudget` shows or reconciles the local monthly credit estimate. `JevExecute` coexists with OpenCode's built-in `task` tool and returns a decision/authority header plus the child result. Pure routing logic lives in `router.ts`; OpenCode wiring lives in `plugin.ts`; child-session execution lives in `execute.ts`.
 
 ## Install
 
@@ -14,7 +14,7 @@ Or as a local plugin — copy `plugin.ts` + `router.ts` + `runtime.ts` into your
 
 ```sh
 mkdir -p .opencode/plugins
-cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts /path/to/opencode-jev-router/runtime.ts /path/to/opencode-jev-router/execute.ts .opencode/plugins/jev-router/
+cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts /path/to/opencode-jev-router/runtime.ts /path/to/opencode-jev-router/execute.ts /path/to/opencode-jev-router/credit-budget.ts .opencode/plugins/jev-router/
 # local plugins needing npm deps also need .opencode/package.json: { "dependencies": { "@opencode-ai/plugin": "^1.18.0" } }
 ```
 
@@ -67,6 +67,14 @@ Note: unlike the old Pi version, there is no local model-registry filtering — 
 - `agents` names existing OpenCode subagents. The plugin reads `.opencode/agents/*.md` (project, then `~/.config/opencode/agents/`) and refuses missing, disabled or shadowed definitions.
 - `timeoutMs` (100–120000) bounds the Jev request only.
 - No fallback by default. Add `"fallback": {"agent":"Explore","model":"...","thinking":"..."}` to allow one on Jev failure. Caller constraints still win; cancellation never falls back.
+
+### Estimated GitHub AI-credit budget
+
+Credit tracking is local and opt-in. It does not call GitHub and does not need a GitHub token. To enable a 24,000-credit monthly target, add a `creditBudget` object and an empirically calibrated `estimatedCreditsPerTask` for each `github-copilot/*` model in your config:
+
+Add `"creditBudget": {"monthlyLimit": 24000, "preferEconomyWhenRemainingBelow": 6000}` to your config, and add `"estimatedCreditsPerTask": <your measured average>` to every `github-copilot/*` model. Do not use a guessed value. When budget tracking is enabled, each estimate must be a positive number; it is a flat estimate per launched task, not a verified GitHub rate. Compare estimates with Copilot settings and tune them. The router reserves the configured estimate before prompting the child session, excludes GitHub models whose estimate would exceed the remaining allowance, and rejects an explicitly constrained GitHub model if it cannot fit. Non-GitHub choices remain available. `JevAgent` only recommends and does not reserve credits; use `JevExecute` for ledgered execution.
+
+The local ledger defaults to `~/.config/opencode/jev-router/credit-usage.json` and resets by UTC calendar month. Set `JEV_ROUTER_CREDIT_LEDGER` to use a different ledger file. Run `JevCreditBudget` to inspect it; call `JevCreditBudget` with `reportedUsage` set to the current month-to-date number shown in Copilot settings to reconcile estimates. This replaces that month's local estimate. Activity outside Jev is not automatically included, so reconcile periodically. The ceiling is enforced against the local estimate, not GitHub's authoritative total.
 
 ## Checks
 

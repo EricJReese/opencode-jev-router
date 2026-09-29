@@ -2,6 +2,7 @@ import { tool, type PluginInput } from '@opencode-ai/plugin';
 import { dirname, resolve } from 'node:path';
 import { THINKING, route, type Agent } from './router.ts';
 import { connectedModels, modelVariant, runtimeCompatibleConfig } from './runtime.ts';
+import { applyCreditBudget, getCreditBudget, reserveCreditEstimate, modelCreditEstimate } from './credit-budget.ts';
 
 type LoadConfig = (directory: string, worktree: string) => Promise<{
   config: Parameters<typeof route>[0];
@@ -72,7 +73,9 @@ export function createJevExecute(
 
       const loaded = await deps.loadConfig(directory, worktree);
       const runtimeModels = await connectedModels(client, directory, context.abort);
-      const config = runtimeCompatibleConfig(loaded.config, runtimeModels);
+      const runtimeConfig = runtimeCompatibleConfig(loaded.config, runtimeModels);
+      const budgetStatus = await getCreditBudget(runtimeConfig);
+      const config = applyCreditBudget(runtimeConfig, args, budgetStatus);
       const definitions = await deps.discoverAgents(directory, worktree);
       const agents: Agent[] = config.agents.map((entry) => {
         const definition = definitions.get(entry.name);
@@ -83,7 +86,8 @@ export function createJevExecute(
         }
         return { name: entry.name, description: definition.description };
       });
-      const selection = await route(config, args, agents, context.abort);
+      const selection = await route(config, args, agents, context.abort, fetch, undefined, budgetStatus);
+      const estimatedCredits = modelCreditEstimate(config, selection);
       context.metadata?.({ title: `Jev executed @${selection.agent} · ${selection.model} (${selection.thinking})` });
 
       const { providerID, modelID } = parseModelRef(selection.model);
@@ -100,6 +104,7 @@ export function createJevExecute(
       );
       const childId = created?.data?.id ?? created?.id;
       if (!childId) throw new Error('JevExecute failed to create a child session.');
+      const updatedBudget = await reserveCreditEstimate(config, selection);
 
       const baseBody = {
         agent: selection.agent,
@@ -124,7 +129,10 @@ export function createJevExecute(
           opts,
         );
       }
-      return `${formatJevHeader(selection)} [via=${via}]\n\n${extractSessionText(prompted)}`;
+      const budgetNote = updatedBudget
+        ? ` [credits-est=${estimatedCredits} month=${updatedBudget.month} used=${updatedBudget.used}/${updatedBudget.limit} remaining=${updatedBudget.remaining}]`
+        : '';
+      return `${formatJevHeader(selection)} [via=${via}]${budgetNote}\n\n${extractSessionText(prompted)}`;
     },
   });
 }

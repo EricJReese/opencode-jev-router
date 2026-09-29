@@ -4,4 +4,5 @@ export { JevRouterPlugin, configCandidates, parseAgentFile } from './plugin.ts';
 export { route, validateConfig, validateInput, validateSelection, JEV_API_URL, JEV_MODEL, jevApiKey, THINKING } from './router.ts';
 export { connectedModels, modelVariant, runtimeCompatibleConfig, type RuntimeModel } from './runtime.ts';
 export { createJevExecute, parseModelRef, formatJevHeader, responseVariant, extractSessionText } from './execute.ts';
+export { applyCreditBudget, getCreditBudget, reserveCreditEstimate, setCreditBudgetUsage, modelCreditEstimate, creditLedgerPath } from './credit-budget.ts';
 export { JevRouterPlugin as default } from './plugin.ts';

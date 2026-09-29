@@ -185,6 +185,28 @@ test('plugin rejects configured models the runtime does not serve', async () => 
   }
 });
 
+test('JevCreditBudget displays and reconciles local usage', async () => {
+  const dir = await project({ config: {
+    ...baseConfig,
+    creditBudget: { monthlyLimit: 24000 },
+  }, agentMd });
+  const ledger = join(dir, 'credits.json');
+  const previousLedger = process.env.JEV_ROUTER_CREDIT_LEDGER;
+  process.env.JEV_ROUTER_CREDIT_LEDGER = ledger;
+  try {
+    const plugin = await JevRouterPlugin({ client } as any);
+    const toolDef = (plugin.tool as any).JevCreditBudget;
+    const run = (args: object) => toolDef.execute(args, context(dir));
+    assert.match(await run({}), /0\/24000 used/);
+    assert.match(await run({ reportedUsage: 3210 }), /3210\/24000 credits/);
+    assert.match(await run({}), /3210\/24000 used/);
+  } finally {
+    if (previousLedger === undefined) delete process.env.JEV_ROUTER_CREDIT_LEDGER;
+    else process.env.JEV_ROUTER_CREDIT_LEDGER = previousLedger;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('parseAgentFile and configCandidates cover OpenCode lookup order', () => {
   assert.equal(parseAgentFile(agentMd).name, 'architect');
   assert.equal(parseAgentFile('---\nenabled: false\ndescription: x\n---\n').enabled, false);
