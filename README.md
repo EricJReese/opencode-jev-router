@@ -65,7 +65,7 @@ mkdir -p .opencode/jev-router
 cp -n /path/to/opencode-jev-router/config.example.json .opencode/jev-router/config.json
 ```
 
-Lookup order is `JEV_ROUTER_CONFIG` (explicit file) → `<project>/.opencode/jev-router/config.json` → `~/.config/opencode/jev-router/config.json`. Agent definition paths in `config.json` are relative to the config file's directory, e.g. `../agents/Explore.md` resolves to `.opencode/agents/Explore.md`. You must provide those subagent definitions yourself (`~/.config/opencode/agents/` globally or `.opencode/agents/` per project).
+Lookup order is `JEV_ROUTER_CONFIG` (explicit file) → `<project>/.opencode/jev-router/config.json` → `~/.config/opencode/jev-router/config.json`. Agent definition paths in `config.json` are relative to the config file's directory, e.g. `../agents/Explore.md` resolves to `.opencode/agents/Explore.md`. The `init` command creates starter definitions for the example config; customize those or provide your own definitions in `~/.config/opencode/agents/` globally or `.opencode/agents/` per project.
 
 Call `JevExecute` to auto-select and execute all three fields:
 
@@ -120,4 +120,6 @@ Tests run on Node 22.18+ with native TypeScript support (older Node 22 releases 
 
 Run `npm test` and `npm pack --dry-run` before publishing. For a first release, log in with `npm login` and publish an available version with `npm publish --access public`. A registry 404 does not guarantee a previously unpublished name or version can be reused.
 
-For later releases, bump the version with `npm version patch` (or `minor`/`major` as appropriate) and publish again. `npm version` also creates a Git commit and tag by default. Pushing to GitHub does not update npm; each published version is a separate snapshot. Users can pin a release in OpenCode with `"plugin": ["opencode-jev-router@0.3.0"]` and change that version when ready to upgrade. Restart OpenCode after changing the plugin configuration.
+For later releases, bump the version with `npm version patch` (or `minor`/`major` as appropriate) and publish again. `npm version` also creates a Git commit and tag by default. After a successful publish, push the version commit and tag with `git push origin main --follow-tags`. Pushing to GitHub does not update npm; each published version is a separate snapshot. Users can pin a release in OpenCode with `"plugin": ["opencode-jev-router@0.3.1"]` and change that version when ready to upgrade. Restart OpenCode after changing the plugin configuration.
+
+README changes on GitHub do not update the README included in an already-published npm version; those changes ship with the next release.
