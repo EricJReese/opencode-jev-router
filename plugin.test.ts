@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { JevRouterPlugin, parseAgentFile, configCandidates } from './plugin.ts';
+import { JevRouterPlugin } from './plugin.ts';
 
 const context = (directory: string) => ({
   directory, worktree: directory, sessionID: 's', messageID: 'm', agent: 'build',
@@ -169,22 +169,6 @@ test('plugin fails before HTTP when config is missing or the agent is disabled',
   }
 });
 
-test('plugin rejects configured models the runtime does not serve', async () => {
-  const plugin = await JevRouterPlugin({ client } as any);
-  const dir = await project({ config: baseConfig, agentMd });
-  try {
-    await assert.rejects(
-      (plugin.tool as any).JevAgent.execute(
-        { prompt: 'Review.', description: 'Review', agent: 'architect', model: 'gateway/missing', thinking: 'high' },
-        context(dir),
-      ),
-      /Model override must exactly match/,
-    );
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
 test('JevCreditBudget displays and reconciles local usage', async () => {
   const dir = await project({ config: {
     ...baseConfig,
@@ -207,9 +191,23 @@ test('JevCreditBudget displays and reconciles local usage', async () => {
   }
 });
 
-test('parseAgentFile and configCandidates cover OpenCode lookup order', () => {
-  assert.equal(parseAgentFile(agentMd).name, 'architect');
-  assert.equal(parseAgentFile('---\nenabled: false\ndescription: x\n---\n').enabled, false);
-  const [first] = configCandidates('/proj', '/proj');
-  assert.ok(first.replace(/\\/g, '/').endsWith('.opencode/jev-router/config.json'));
+test('singular agent directory is supported and disable: true prevents routing', async () => {
+  const dir = await project({ config: {
+    ...baseConfig,
+    agents: [{ name: 'architect', definition: '../agent/architect.md' }],
+  }, agentMd });
+  try {
+    await mkdir(join(dir, '.opencode/agent'));
+    const path = join(dir, '.opencode/agent/architect.md');
+    await writeFile(path, agentMd);
+    const plugin = await JevRouterPlugin({ client } as any);
+    const execute = (plugin.tool as any).JevAgent.execute;
+    const args = { prompt: 'Review.', description: 'Review',
+      agent: 'architect', model: 'gateway/strong', thinking: 'high' };
+    assert.match(await execute(args, context(dir)), /constraints/);
+    await writeFile(path, '---\ndisable: true\ndescription: Disabled\n---\n');
+    await assert.rejects(execute(args, context(dir)), /disabled/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

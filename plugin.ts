@@ -24,7 +24,8 @@ export function parseAgentFile(text: string): { name: string; description: unkno
   return {
     name: frontmatter.name || '',
     description: frontmatter.description ?? '',
-    enabled: frontmatter.enabled === undefined ? undefined : frontmatter.enabled !== 'false',
+    enabled: frontmatter.disable === 'true' ? false :
+      frontmatter.enabled === undefined ? undefined : frontmatter.enabled !== 'false',
   };
 }
 
@@ -72,8 +73,11 @@ async function discoverAgents(directory: string, worktree: string): Promise<Map<
   const home = homedir();
   const seen = new Set<string>();
   for (const folder of [
+    resolve(directory, '.opencode/agent'),
     resolve(directory, '.opencode/agents'),
+    resolve(worktree, '.opencode/agent'),
     resolve(worktree, '.opencode/agents'),
+    resolve(home, '.config/opencode/agent'),
     resolve(home, '.config/opencode/agents'),
   ]) {
     if (seen.has(folder)) continue;

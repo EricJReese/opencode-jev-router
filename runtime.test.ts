@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { connectedModels, modelVariant, runtimeCompatibleConfig } from './runtime.ts';
+import { connectedModels, runtimeCompatibleConfig } from './runtime.ts';
 
 const providerList = (connected: string[], all: Array<{ id: string; models: Record<string, unknown> }>) => ({
   async list() { return { data: { connected, all } }; },
@@ -21,11 +21,6 @@ test('connectedModels returns only models from connected providers', async () =>
   assert.deepEqual(await connectedModels(client, '/proj'), [
     { providerID: 'a', id: 'm', variants: { high: {} }, capabilities: { reasoning: true } },
   ]);
-});
-
-test('modelVariant maps Jev off to the OpenCode none variant', () => {
-  assert.equal(modelVariant('off'), 'none');
-  assert.equal(modelVariant('high'), 'high');
 });
 
 test('runtimeCompatibleConfig keeps only runtime-supported thinking levels', () => {

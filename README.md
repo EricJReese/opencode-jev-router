@@ -4,21 +4,52 @@
 
 ## Install
 
-As an npm plugin (any project):
+### npm installation (recommended)
+
+From your project directory, generate the router config, starter subagents, and routing skill:
+
+```sh
+npx opencode-jev-router init
+```
+
+Use `npx opencode-jev-router init --global` for setup under `~/.config/opencode/` instead. Existing files are preserved, so running setup again is safe. The starter agents are basic role prompts; review and customize them for your project. Setup reads an existing router config and only generates recognized starter agents at their default paths.
+
+Add the package to the `plugin` array in `opencode.json` (merge with your existing configuration):
 
 ```json
 { "$schema": "https://opencode.ai/config.json", "plugin": ["opencode-jev-router"] }
 ```
 
-Or as a local plugin — copy `plugin.ts` + `router.ts` + `runtime.ts` into your project or global plugin dir:
+OpenCode installs the npm plugin and its dependencies. You do not need to copy its source files or locate OpenCode's package cache. Review `.opencode/jev-router/config.json` so its model IDs and thinking levels match your connected providers. Set `TYPESAFE_API_KEY` in the environment of the process launching OpenCode, then quit and restart OpenCode.
+
+The example uses GitHub Copilot and OpenCode models; it is a preference catalog, not a requirement to use those providers. Replace it with your own supported models as needed. API keys and provider authentication are configured separately.
+
+### Local source installation
+
+Keep the six runtime files together **outside** the auto-discovered plugin directory, and place only a small entry file inside that directory:
 
 ```sh
-mkdir -p .opencode/plugins
-cp /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts /path/to/opencode-jev-router/runtime.ts /path/to/opencode-jev-router/execute.ts /path/to/opencode-jev-router/credit-budget.ts .opencode/plugins/jev-router/
+mkdir -p .opencode/plugins .opencode/jev-router
+cp /path/to/opencode-jev-router/index.ts /path/to/opencode-jev-router/plugin.ts /path/to/opencode-jev-router/router.ts /path/to/opencode-jev-router/runtime.ts /path/to/opencode-jev-router/execute.ts /path/to/opencode-jev-router/credit-budget.ts .opencode/jev-router/
 # local plugins needing npm deps also need .opencode/package.json: { "dependencies": { "@opencode-ai/plugin": "^1.18.0" } }
 ```
 
-Optional but recommended: copy the routing skill alongside it:
+Create `.opencode/plugins/jev-router.ts` containing:
+
+```ts
+export { default } from '../jev-router/index.ts';
+```
+
+Helper modules export ordinary functions; placing them in the plugin directory can cause OpenCode to load those functions as plugins. `index.ts` exports only the plugin. Programmatic consumers can import helpers from `opencode-jev-router/api` or individual subpaths such as `opencode-jev-router/router` and `opencode-jev-router/credit-budget`.
+
+Run setup from the source checkout to initialize another project without npm publication:
+
+```sh
+# Run with the target project as your current directory:
+node /path/to/opencode-jev-router/cli.js init
+```
+
+Or copy the routing skill manually:
 
 ```sh
 mkdir -p .opencode/skills
@@ -27,11 +58,11 @@ cp -r /path/to/opencode-jev-router/skills/jev-router .opencode/skills/
 
 Global equivalents: `~/.config/opencode/plugins/` and `~/.config/opencode/jev-router/config.json`.
 
-Copy the example config into your own OpenCode config directory (project first, global fallback):
+For manual setup, copy the example config from the source checkout (the init command already does this):
 
 ```sh
 mkdir -p .opencode/jev-router
-cp -n node_modules/opencode-jev-router/config.example.json .opencode/jev-router/config.json
+cp -n /path/to/opencode-jev-router/config.example.json .opencode/jev-router/config.json
 ```
 
 Lookup order is `JEV_ROUTER_CONFIG` (explicit file) → `<project>/.opencode/jev-router/config.json` → `~/.config/opencode/jev-router/config.json`. Agent definition paths in `config.json` are relative to the config file's directory, e.g. `../agents/Explore.md` resolves to `.opencode/agents/Explore.md`. You must provide those subagent definitions yourself (`~/.config/opencode/agents/` globally or `.opencode/agents/` per project).
@@ -57,14 +88,14 @@ Never put keys in `config.json` or commit them. The router resolves at runtime:
 - Routing (Jev `systemone` call, `router.ts: jevApiKey`): `TYPESAFE_API_KEY`. Endpoint is `https://api.typesafe.ai/v1/systemone` and the model is `jev-latest` (constants `JEV_API_URL`/`JEV_MODEL` in `router.ts`).
 - Execution models (the `models[]` in `config.json`): these are OpenCode providers. Model IDs in `config.json` must match what the connected providers offer (see `runtime.ts`: the tool intersects the configured catalog with the running instance's connected models before routing).
 
-So a consuming app's `.env`/`.env.local` holds `TYPESAFE_API_KEY=`; this repo holds only code + `config.example.json`.
+The plugin reads `process.env.TYPESAFE_API_KEY`; it does not load `.env` or `.env.local` itself. If you store the key in an environment file, your launcher must load it before starting OpenCode. This repo holds only code and example configuration.
 
 Note: unlike the old Pi version, there is no local model-registry filtering — the runtime compatibility filter uses the connected models exposed by OpenCode before offering Jev its choices.
 
 ## Configuration
 
 - `models` lists exact provider/model IDs, tiers, strengths/weaknesses, `thinking.supported` + `thinking.default`, routing hints, nullable `benchmarks.artificialAnalysis` (`null` = unknown). `routing.escalateTo` is advisory only. At runtime the list is filtered to connected providers and advertised thinking variants, so keep it as the full preference set rather than trimming it per machine.
-- `agents` names existing OpenCode subagents. The plugin reads `.opencode/agents/*.md` (project, then `~/.config/opencode/agents/`) and refuses missing, disabled or shadowed definitions.
+- `agents` names existing OpenCode subagents. The plugin reads `.opencode/agent/*.md` and `.opencode/agents/*.md` (project, then their global equivalents) and refuses missing, disabled (`disable: true`), or shadowed definitions. The singular folder is checked first within each scope; config definition paths must point at the discovered file.
 - `timeoutMs` (100–120000) bounds the Jev request only.
 - No fallback by default. Add `"fallback": {"agent":"Explore","model":"...","thinking":"..."}` to allow one on Jev failure. Caller constraints still win; cancellation never falls back.
 
@@ -80,7 +111,13 @@ The local ledger defaults to `~/.config/opencode/jev-router/credit-usage.json` a
 
 ```sh
 npm install
-node --test *.test.ts
+npm test
 ```
 
-Tests run on Node 22+ with native TypeScript support. HTTP is mocked; nothing hits paid Jev or launches a real subagent.
+Tests run on Node 22.18+ with native TypeScript support (older Node 22 releases may need `--experimental-strip-types`). HTTP is mocked; nothing hits paid Jev or launches a real subagent.
+
+## Publishing updates
+
+Run `npm test` and `npm pack --dry-run` before publishing. For a first release, log in with `npm login` and publish an available version with `npm publish --access public`. A registry 404 does not guarantee a previously unpublished name or version can be reused.
+
+For later releases, bump the version with `npm version patch` (or `minor`/`major` as appropriate) and publish again. `npm version` also creates a Git commit and tag by default. Pushing to GitHub does not update npm; each published version is a separate snapshot. Users can pin a release in OpenCode with `"plugin": ["opencode-jev-router@0.3.0"]` and change that version when ready to upgrade. Restart OpenCode after changing the plugin configuration.

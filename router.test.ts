@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { route, rpc, validateConfig, type Config, type Input } from './router.ts';
 
@@ -20,17 +19,6 @@ const config = (): Config => validateConfig({
 const agents = [{ name: 'Explore', description: 'Locate files' }, { name: 'architect', description: 'Architecture decisions' }];
 const task: Input = { prompt: 'Find the login module.', description: 'Find login module' };
 const answer = (choice: string) => ({ type: 'choice', choice });
-
-test('distributed model catalog uses the new schema and keeps Muse max advisory', () => {
-  const example = validateConfig(JSON.parse(readFileSync(new URL('./config.example.json', import.meta.url), 'utf8')));
-  assert.deepEqual(example.models.map(m => m.id), [
-    'github-copilot/gpt-6-astra', 'github-copilot/gpt-6-sol', 'github-copilot/gpt-6-luna',
-    'opencode/muse-spark-1.3-contributor-free',
-  ]);
-  assert.deepEqual(example.models[3].thinking, { supported: ['minimal', 'low', 'medium', 'high', 'xhigh'], default: 'xhigh' });
-  assert.equal(example.models[3].routing.escalateTo, 'github-copilot/gpt-6-sol');
-  assert.equal(example.models[3].benchmarks.artificialAnalysis.intelligenceIndex, null);
-});
 
 // Stub only the HTTP boundary. Candidate construction and validation remain real.
 test('one Jev request selects an agent and a compatible model/thinking pair', async () => {

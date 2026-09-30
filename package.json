@@ -6,15 +6,19 @@
   "repository": { "type": "git", "url": "https://github.com/EricJReese/opencode-jev-router.git" },
   "type": "module",
   "main": "./index.ts",
+  "bin": { "opencode-jev-router": "./cli.js" },
+  "scripts": { "test": "node --test *.test.ts" },
   "exports": {
     ".": "./index.ts",
+    "./api": "./api.ts",
     "./plugin": "./plugin.ts",
     "./router": "./router.ts",
     "./runtime": "./runtime.ts",
-    "./execute": "./execute.ts"
+    "./execute": "./execute.ts",
+    "./credit-budget": "./credit-budget.ts"
   },
   "keywords": ["opencode", "opencode-plugin", "jev", "router", "subagents"],
-  "files": ["index.ts", "plugin.ts", "router.ts", "runtime.ts", "execute.ts", "credit-budget.ts", "config.example.json", "README.md", "skills/jev-router/SKILL.md"],
+  "files": ["index.ts", "api.ts", "cli.js", "plugin.ts", "router.ts", "runtime.ts", "execute.ts", "credit-budget.ts", "config.example.json", "README.md", "skills/jev-router/SKILL.md"],
   "dependencies": {
     "@opencode-ai/plugin": "^1.18.0"
   },
